@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos Guardados - Visualizador en Vivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Fondo oscuro elegante */
+            color: #e2e8f0; /* Texto claro */
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        .order-card {
+            background-color: #374151; /* Gris oscuro para las tarjetas de pedido */
+            border-left: 6px solid #4f46e5; /* Barra de color para destacar */
+        }
+        /* Estilo NEON para el título */
+        .text-neon {
+            color: #00e5ff;
+            text-shadow: 0 0 4px #00e5ff, 0 0 8px #00e5ff;
+        }
+        .order-list-item {
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="mb-8">
+        <h1 class="text-4xl font-black text-center text-neon border-b border-indigo-500 pb-3 mb-2">
+            Visualizador de Pedidos Activos
+        </h1>
+        <p class="text-center text-gray-400">Ordenado por Número de Ticket (ASC) - Actualización en tiempo real</p>
+    </header>
+
+    <div id="ordersListContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <p class="text-center text-gray-400 italic col-span-full">Cargando pedidos...</p>
+    </div>
+    
+    <script>
+        const ordersListContainer = document.getElementById('ordersListContainer');
+        let savedOrders = [];
+
+        /**
+         * Lee los pedidos desde localStorage, los ordena por ticketNumber (ascendente)
+         * y los renderiza en la interfaz.
+         */
+        function renderSavedOrders() {
+            ordersListContainer.innerHTML = ''; // Limpia la lista
+            
+            try {
+                // 1. Leer y Parsear
+                const ordersData = localStorage.getItem('savedOrders');
+                savedOrders = ordersData ? JSON.parse(ordersData) : [];
+            } catch (error) {
+                console.error("Error al leer pedidos de localStorage:", error);
+                savedOrders = [];
+            }
+
+            if (savedOrders.length === 0) {
+                ordersListContainer.innerHTML = '<p class="text-center text-gray-400 italic col-span-full">No hay pedidos guardados.</p>';
+                return;
+            }
+
+            // 2. Ordenar por Ticket Number (Ascendente: del más bajo al más alto)
+            savedOrders.sort((a, b) => (a.ticketNumber || 0) - (b.ticketNumber || 0));
+
+            // 3. Renderizar
+            savedOrders.forEach(order => {
+                const orderCard = document.createElement('div');
+                orderCard.className = 'order-card p-4 rounded-xl shadow-lg transition-shadow duration-300 hover:shadow-2xl flex flex-col justify-between';
+                orderCard.dataset.id = order.id; // Para la eliminación
+
+                // Asegura un número de ticket
+                const ticketNumber = order.ticketNumber || 'N/A';
+                
+                let productsHtml = order.products.map(p => {
+                    // Formatea la cantidad para eliminar decimales si es un número entero
+                    const quantity = Number.isInteger(p.quantity) ? p.quantity.toString() : p.quantity.toFixed(3);
+                    return `<li class="text-gray-300 order-list-item ml-4 list-disc">${p.name.toLowerCase()}: <span class="font-bold text-indigo-200">${quantity} ${p.unit}</span></li>`;
+                }).join('');
+
+                orderCard.innerHTML = `
+                    <div class="flex-grow">
+                         <div class="flex justify-between items-center mb-3">
+                            <h2 class="text-2xl font-extrabold text-white">Ticket #${ticketNumber}</h2>
+                            <button class="delete-order-button text-red-400 hover:text-red-500 transition-colors" data-id="${order.id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                        <h4 class="text-lg font-semibold text-indigo-300 truncate mb-1">${order.clientName}</h4>
+                        <p class="text-xs text-gray-400 mb-3">Guardado: ${order.date}</p>
+                        <ul class="space-y-1 mb-4">${productsHtml}</ul>
+                    </div>
+                `;
+                
+                ordersListContainer.appendChild(orderCard);
+            });
+            
+             // Añade el manejador de eventos para los botones de eliminar
+            document.querySelectorAll('.delete-order-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const orderId = parseInt(e.currentTarget.dataset.id);
+                    deleteSavedOrder(orderId);
+                });
+            });
+        }
+        
+        /**
+         * Elimina un pedido guardado por su ID y actualiza localStorage.
+         * @param {number} id El ID del pedido a eliminar.
+         */
+        function deleteSavedOrder(id) {
+            // Se lee de nuevo para asegurar que se está trabajando con el estado más reciente
+            const ordersData = localStorage.getItem('savedOrders');
+            let currentOrders = ordersData ? JSON.parse(ordersData) : [];
+            
+            // Filtra y elimina el pedido
+            const updatedOrders = currentOrders.filter(order => order.id !== id);
+            
+            // Guarda la nueva lista en localStorage
+            localStorage.setItem('savedOrders', JSON.stringify(updatedOrders));
+            
+            // Llama a renderSavedOrders para que la lista se actualice inmediatamente
+            renderSavedOrders(); 
+        }
+
+        // =========================================================
+        // === REAL-TIME UPDATE (Storage Event) ===
+        // =========================================================
+
+        /**
+         * Escucha los cambios en localStorage desde otras pestañas/ventanas.
+         * Esto actualiza la lista cuando se guarda un pedido en la página principal.
+         */
+        window.addEventListener('storage', (e) => {
+            // Solo actualiza si la clave 'savedOrders' ha cambiado
+            if (e.key === 'savedOrders') {
+                console.log("Cambio detectado en 'savedOrders'. Actualizando lista.");
+                renderSavedOrders();
+            }
+        });
+
+        // =========================================================
+
+        // Renderiza la lista al cargar la página
+        window.onload = renderSavedOrders;
+    </script>
+
+</body>
+</html>
