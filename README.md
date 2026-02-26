@@ -1,2 +1,0 @@
-# Charcuteria
- Charcuteria Emisor+Receptor
